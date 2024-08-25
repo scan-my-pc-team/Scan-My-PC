@@ -27,9 +27,11 @@ $PassColour = "Green"
 function Main {
     # Define the output path on the Desktop
     $desktopPath = [System.IO.Path]::Combine([System.Environment]::GetFolderPath('Desktop'))
+    # Define the hostname of the user
+    $hostname = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name -replace '^[^\\]*\\', ''
 
     # Create the PCScan folder on the Desktop
-    $pcScanFolderPath = $desktopPath + "\PCScan"
+    $pcScanFolderPath = $desktopPath + "\$hostname PCScan"
     if (-not (Test-Path $pcScanFolderPath)) {
         $null = New-Item -ItemType Directory -Path $pcScanFolderPath -Force
     }
@@ -42,7 +44,6 @@ function Main {
 
     # Collect and write system information
     # PC Info
-    $hostname = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name -replace '^[^\\]*\\', ''
     $serialNumber = (Get-WmiObject -Class Win32_BIOS).SerialNumber
     $os = Get-WmiObject -Class Win32_OperatingSystem
     $registeredUser = $os.RegisteredUser
@@ -231,10 +232,12 @@ do {
     if ($choice -eq "1") {
         Main
         break
-    } elseif ($choice -eq "0") {
+    }
+    elseif ($choice -eq "0") {
         Write-Host "Exiting the script." -ForegroundColor White
         Exit
-    } else {
+    }
+    else {
         Write-Host "B R U H!!! Invalid input. Please try again." -ForegroundColor $ErrorColour
     }
 } while ($true)
