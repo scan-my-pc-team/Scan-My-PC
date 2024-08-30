@@ -48,17 +48,19 @@ function Main {
     $os = Get-WmiObject -Class Win32_OperatingSystem
     $registeredUser = $os.RegisteredUser
     $OSarchitecture = (Get-CimInstance Win32_operatingsystem).OSArchitecture
+    $computerModel = (Get-CimInstance Win32_ComputerSystem).Model
 
     $output = @"
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 PC Info:
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 Hostname: $hostname
 Serial Number: $serialNumber
+Computer Model: $computerModel
+Registered User: $registeredUser
 Operating System: $($os.Caption)
 OS Version: $($os.Version)
 Build Number: $($os.BuildNumber)
-Registered User: $registeredUser
 OS Architecture: $OSarchitecture
 
 "@
@@ -69,9 +71,9 @@ OS Architecture: $OSarchitecture
     $cpu = Get-WmiObject Win32_Processor
     foreach ($processor in $cpu) {
         $cpuInfo = @"
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 CPU Info:
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 Name: $($processor.Name)
 Manufacturer: $($processor.Manufacturer)
 Description: $($processor.Description)
@@ -83,37 +85,57 @@ Max Clock Speed: $($processor.MaxClockSpeed) MHz
         $cpuInfo | Out-File -FilePath $outputFilePath -Append -Encoding UTF8
     }
 
-    # GPU Info
-    $gpus = Get-CimInstance Win32_VideoController
+# GPU Info
+$gpus = Get-CimInstance Win32_VideoController
 
-    if ($gpus.Name -ilike "*NVIDIA*") {
+# Initialize an array to store GPU information
+$gpuInfos = @()
+
+# Loop through each GPU and process information
+foreach ($gpu in $gpus) {
+    # Check if the GPU is an Intel or NVIDIA GPU
+    if ($gpu.Name -ilike "*NVIDIA*") {
         $qwMemorySize = (Get-ItemProperty -Path "HKLM:\SYSTEM\ControlSet001\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}\0*" -Name HardwareInformation.qwMemorySize -ErrorAction SilentlyContinue)."HardwareInformation.qwMemorySize"
     }
-    elseif ($gpus.Name -ilike "*Intel*") {
-        $qwMemorySize = ($gpus).AdapterRam
+    elseif ($gpu.Name -ilike "*Intel*") {
+        $qwMemorySize = $gpu.AdapterRam
+    }
+    else {
+        # Skip DisplayLink and other non-target GPUs
+        continue
     }
 
-    $VRAM = [math]::round($qwMemorySize / 1GB)
+    if ($qwMemorySize) {
+        # Ensure $qwMemorySize is a number before division
+        $VRAM = [math]::round($qwMemorySize / 1GB)
+    } else {
+        $VRAM = "N/A"
+    }
 
-    foreach ($gpu in $gpus) {
-        $gpuInfo = @"
-------------------------------------------------------------
+    # Create GPU info string
+    $gpuInfo = @"
+------------------------------------------------------------------------------------------------------------------------
 GPU Info:
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 Manufacturer: $($gpu.AdapterCompatibility)
 Model: $($gpu.Name)
 VRAM: $VRAM GB
 
 "@
-        $gpuInfo | Out-File -FilePath $outputFilePath -Append -Encoding UTF8
-    }
+
+    # Add GPU info to the array
+    $gpuInfos += $gpuInfo
+}
+
+# Output all GPU information to file
+$gpuInfos | Out-File -FilePath $outputFilePath -Append -Encoding UTF8
 
     # Motherboard Info
     $motherboard = Get-WmiObject Win32_BaseBoard
     $motherboardInfo = @"
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 Motherboard Info:
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 Manufacturer: $($motherboard.Manufacturer)
 Model: $($motherboard.Product)
 Serial Number: $($motherboard.SerialNumber)
@@ -125,9 +147,9 @@ Version: $($motherboard.Version)
     # Storage Info
     $diskDrives = Get-WmiObject Win32_DiskDrive
     $storageInfo = @"
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 Storage Info:
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 
 "@
     foreach ($disk in $diskDrives) {
@@ -150,9 +172,9 @@ Interface Type: $($disk.InterfaceType)
     $totalCapacityGB = [math]::round($totalCapacity / 1GB, 2)
     $firstModule = $ramModules | Select-Object -First 1
     $ramInfo = @"
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 RAM Info:
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 Total Capacity: $totalCapacityGB GB
 Speed: $($firstModule.Speed) MHz
 Manufacturer: $($firstModule.Manufacturer)
@@ -167,9 +189,9 @@ SerialNumber: $($firstModule.SerialNumber)
     foreach ($pnpDevice in $pnpUsbDevices) {
         if ($pnpDevice.PNPClass -ne $null) {
             $deviceInfo = @"
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 USB Device #$deviceCount Info:
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 Name: $($pnpDevice.FriendlyName)
 PNPClass: $($pnpDevice.PNPClass)
 
@@ -183,9 +205,9 @@ PNPClass: $($pnpDevice.PNPClass)
     $mappedDrives = Get-WmiObject -Query "SELECT * FROM Win32_NetworkConnection"
 
     $networkDriveInfo = @"
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 Mapped Network Drives Info:
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 
 "@
     foreach ($drive in $mappedDrives) {
@@ -201,9 +223,9 @@ Status: $($drive.Status)
 
     # Installed Applications
     $appInfo = @"
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 Installed Applications:
-------------------------------------------------------------
+------------------------------------------------------------------------------------------------------------------------
 "@
 
     $appInfo | Out-File -FilePath $outputFilePath -Append -Encoding UTF8
